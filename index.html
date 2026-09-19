@@ -3,24 +3,106 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Inkrail — Digital kits for operators</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1.25rem; line-height: 1.5; color: #111; }
-    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
-    .tag { color: #555; margin-bottom: 1.5rem; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem 1.25rem; margin: 1rem 0; }
-    a { color: #5b21b6; }
-  </style>
+  <meta name="description" content="Inkrail — Flow Score: free teaser that scores your DTC lifecycle email flows and ranks top fixes." />
+  <title>Inkrail — Flow Score</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <h1>Inkrail</h1>
-  <p class="tag">Digital products for ecommerce &amp; solo operators</p>
-  <p>We sell instant digital downloads: email marketing flow kits, operational templates, and related guides. Delivery is online only — no physical shipping, no custom freelance retainers on this storefront.</p>
-  <div class="card">
-    <strong>DTC Email Flow Mini-Kit</strong>
-    <p>Lifecycle email blueprints (welcome, abandoned cart, winback, and more) with plain-text copy and setup checklists for tools like Klaviyo.</p>
-    <p>Checkout via Lemon Squeezy (coming soon).</p>
+  <div class="wrap">
+    <nav class="nav" aria-label="Primary">
+      <a class="brand" href="index.html">Inkrail</a>
+      <div class="nav-links">
+        <a href="score.html">Flow Score</a>
+        <a href="mailto:inkrailco@gmail.com">Contact</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <span class="badge">Free teaser</span>
+      <h1>Know which lifecycle flows are leaking revenue</h1>
+      <p class="lede">
+        Inkrail Flow Score is a quick interactive audit for DTC / ecommerce email:
+        answer eight yes/no checks, get a 0–100 score, and see ranked top fixes.
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href="score.html">Get your Flow Score →</a>
+        <a class="btn btn-ghost" href="#waitlist">Join waitlist</a>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>What you get (free)</h2>
+      <ul class="checklist-mini">
+        <li>Weighted 0–100 score across welcome, cart, post-purchase, winback, and more</li>
+        <li>Ranked top 3 fixes — not a bare “buy the checklist” wall</li>
+        <li>~2 minutes · mobile-friendly · no signup required for the score</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Full report (coming soon)</h2>
+      <p>Complete ranked fix list + export unlocks via Lemon Squeezy when checkout goes live. No API keys in this site.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="score.html">Try the free teaser</a>
+      </div>
+    </section>
+
+    <section class="card" id="waitlist">
+      <h2>Waitlist</h2>
+      <p class="muted">Want the unlock link when it’s ready? Leave your email.</p>
+      <form class="waitlist-form" id="home-waitlist-form">
+        <label class="hidden" for="home-waitlist-email">Email</label>
+        <input type="email" id="home-waitlist-email" name="email" placeholder="you@brand.com" required autocomplete="email" />
+        <button type="submit" class="btn btn-primary">Notify me</button>
+      </form>
+      <p class="waitlist-msg" id="home-waitlist-msg" role="status"></p>
+      <p class="note">
+        <strong>Static hosting note:</strong> GitHub Pages cannot receive form POSTs.
+        This button saves your intent in <code>localStorage</code> and opens a prefilled
+        <code>mailto:inkrailco@gmail.com</code>. For production capture later, plug in Formspree (or similar).
+        A local <code>waitlist.jsonl</code> stub exists in the repo for operator handoff — browsers cannot append to it.
+      </p>
+    </section>
+
+    <p class="backlog">
+      <strong>Backlog / later:</strong> DTC Email Flow Mini-Kit (copy pack) is deferred — not for sale on this storefront during the Flow Score evidence gate.
+    </p>
+
+    <footer>
+      <p>Inkrail · digital tools for ecommerce operators</p>
+      <p>Contact: <a href="mailto:inkrailco@gmail.com">inkrailco@gmail.com</a></p>
+    </footer>
   </div>
-  <p>Contact: <a href="mailto:inkrailco@gmail.com">inkrailco@gmail.com</a></p>
+  <script>
+    (function () {
+      var form = document.getElementById("home-waitlist-form");
+      var input = document.getElementById("home-waitlist-email");
+      var msg = document.getElementById("home-waitlist-msg");
+      if (!form) return;
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var email = (input.value || "").trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          msg.className = "waitlist-msg err";
+          msg.textContent = "Enter a valid email.";
+          return;
+        }
+        var entry = { email: email, source: "index-waitlist", at: new Date().toISOString() };
+        try {
+          var list = JSON.parse(localStorage.getItem("inkrail_waitlist_intents") || "[]");
+          if (!Array.isArray(list)) list = [];
+          list.push(entry);
+          localStorage.setItem("inkrail_waitlist_intents", JSON.stringify(list));
+        } catch (_) {}
+        msg.className = "waitlist-msg ok";
+        msg.textContent = "Thanks — we'll follow up. Intent saved on this device.";
+        var subject = encodeURIComponent("Inkrail Flow Score waitlist");
+        var body = encodeURIComponent("Please add me to the Flow Score waitlist.\n\nEmail: " + email + "\n");
+        setTimeout(function () {
+          window.location.href = "mailto:inkrailco@gmail.com?subject=" + subject + "&body=" + body;
+        }, 250);
+      });
+    })();
+  </script>
 </body>
 </html>

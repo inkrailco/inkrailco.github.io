@@ -1,0 +1,3 @@
+# Inkrail waitlist stub (operator handoff). Static GH Pages cannot append from the browser.
+# Real capture: localStorage key "inkrail_waitlist_intents" + mailto, or Formspree later.
+# Format when manually curated: {"email":"...","source":"...","at":"..."}
