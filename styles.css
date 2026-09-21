@@ -434,3 +434,6 @@ footer {
   padding-left: 0.85rem;
   margin: 1.5rem 0 0;
 }
+
+.legal h2 { font-size: 1.05rem; margin-top: 1.25rem; }
+.legal ul { padding-left: 1.2rem; }
