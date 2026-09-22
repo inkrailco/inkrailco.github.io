@@ -1,4 +1,3 @@
-
 /**
  * Inkrail Flow Score v0 — client-side weighted rubric (teaser)
  * No secrets / no Lemon Squeezy API keys.
@@ -339,7 +338,7 @@
 })();
 
 /* Checkout wiring: set INKRAIL_CHECKOUT_URL to the live Lemon Squeezy checkout when ready. */
-window.INKRAIL_CHECKOUT_URL = window.INKRAIL_CHECKOUT_URL || "";
+window.INKRAIL_CHECKOUT_URL = window.INKRAIL_CHECKOUT_URL || "https://inkrail.lemonsqueezy.com/checkout/buy/baf7f0ed-9ced-4757-bfb7-f11e23b7a844";
 document.addEventListener("DOMContentLoaded", function () {
   var btn = document.getElementById("cta-checkout");
   var note = document.getElementById("cta-checkout-note");
