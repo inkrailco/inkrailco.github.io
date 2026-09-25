@@ -113,6 +113,28 @@
     restoreBox: document.getElementById("restore-box")
   };
 
+  // GoatCounter events (no answers, scores, or emails are ever sent).
+  // Event names: event-quiz-complete / event-cta-checkout, with "-gads" appended
+  // when the browser session arrived from a Google Ads click (utm_source=google&utm_medium=cpc or gclid).
+  function trafficSuffix() {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get("gclid") || ((p.get("utm_source") || "").toLowerCase() === "google" &&
+          (p.get("utm_medium") || "").toLowerCase() === "cpc")) {
+        sessionStorage.setItem("inkrail_src", "gads");
+      }
+      return sessionStorage.getItem("inkrail_src") === "gads" ? "-gads" : "";
+    } catch (_) { return ""; }
+  }
+  const TRAFFIC_SUFFIX = trafficSuffix();
+  function gcEvent(name) {
+    try {
+      if (window.goatcounter && typeof window.goatcounter.count === "function") {
+        window.goatcounter.count({ path: "event-" + name + TRAFFIC_SUFFIX, title: name, event: true });
+      }
+    } catch (_) { /* analytics must never break the quiz */ }
+  }
+
   let answers = {}; // id -> boolean
   let index = 0;
 
@@ -145,7 +167,21 @@
     return next;
   }
 
-  function onFirstUnlock(_u) { /* analytics hook (GoatCounter variant) */ }
+  // GoatCounter: fire "event-unlock" once per device, the first time it unlocks (no key, email, or answers sent).
+  // Fixed path (no "-gads" suffix): the checkout tab is opened with noopener, so session attribution
+  // typically does not carry over into the post-purchase redirect tab. count.js loads async, so retry briefly.
+  function onFirstUnlock(u) {
+    let tries = 0;
+    (function send() {
+      try {
+        if (window.goatcounter && typeof window.goatcounter.count === "function") {
+          window.goatcounter.count({ path: "event-unlock", title: "unlock (" + (u.method || "unknown") + ")", event: true });
+          return;
+        }
+      } catch (_) { return; /* analytics must never break the page */ }
+      if (++tries < 40) setTimeout(send, 250);
+    })();
+  }
 
   function isUnlocked() { return !!readUnlock(); }
 
@@ -583,6 +619,9 @@
     answers[q.id] = yes;
     index += 1;
     saveState();
+    if (index === QUESTIONS.length && answeredCount() === QUESTIONS.length) {
+      gcEvent("quiz-complete"); // fresh completion only; reload-resume does not fire
+    }
     renderQuestion();
   }
 
@@ -658,6 +697,8 @@
   els.btnBack.addEventListener("click", goBack);
   if (els.btnRestart) els.btnRestart.addEventListener("click", restart);
   if (els.waitlistForm) els.waitlistForm.addEventListener("submit", onWaitlistSubmit);
+  const ctaCheckout = document.getElementById("cta-checkout");
+  if (ctaCheckout) ctaCheckout.addEventListener("click", function () { gcEvent("cta-checkout"); });
   Array.prototype.forEach.call(document.querySelectorAll("form.license-form"), function (f) {
     f.addEventListener("submit", onLicenseSubmit);
   });
