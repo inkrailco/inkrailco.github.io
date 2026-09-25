@@ -1,6 +1,6 @@
 /**
- * Inkrail Flow Score v0 — client-side weighted rubric (teaser)
- * No secrets / no Lemon Squeezy API keys.
+ * Inkrail Flow Score v0 — client-side weighted rubric (teaser) + full report unlock (v1)
+ * No secrets / no Lemon Squeezy API keys. Full report content: report-content.js.
  */
 (function () {
   "use strict";
@@ -102,11 +102,338 @@
     lockedFixes: document.getElementById("locked-fixes"),
     waitlistForm: document.getElementById("waitlist-form"),
     waitlistEmail: document.getElementById("waitlist-email"),
-    waitlistMsg: document.getElementById("waitlist-msg")
+    waitlistMsg: document.getElementById("waitlist-msg"),
+    freeCard: document.getElementById("free-card"),
+    lockedCard: document.getElementById("locked-card"),
+    waitlistCard: document.getElementById("waitlist"),
+    fullReport: document.getElementById("full-report"),
+    reportBody: document.getElementById("report-body"),
+    unlockStatus: document.getElementById("unlock-status"),
+    unlockBanner: document.getElementById("unlock-banner"),
+    restoreBox: document.getElementById("restore-box")
   };
 
   let answers = {}; // id -> boolean
   let index = 0;
+
+  /* ===================== Full report unlock (v1) =====================
+   * Honest scope: this is a static site. The unlock is enforced only in this browser
+   * (localStorage). ?unlocked=1 (the Lemon Squeezy post-purchase redirect) unlocks this
+   * device on trust. A license key is checked against Lemon Squeezy's public License API
+   * (validate only, no API key, never "activate"); if that call cannot be completed, a
+   * well-formed key is accepted and marked unverified. Report content is not secret.
+   */
+  const UNLOCK_KEY = "inkrail_flow_unlock_v1";
+  const LS_VALIDATE_URL = "https://api.lemonsqueezy.com/v1/licenses/validate";
+  const LS_ALLOWED_PRODUCT_IDS = [1379493]; // live "Flow Score full report" product
+  const SUPPORT_EMAIL = "inkrailco@gmail.com";
+  const KEY_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const REPORT = window.INKRAIL_REPORT_CONTENT || null;
+
+  function readUnlock() {
+    try {
+      const u = JSON.parse(localStorage.getItem(UNLOCK_KEY) || "null");
+      return u && u.unlocked === true ? u : null;
+    } catch (_) { return null; }
+  }
+
+  function writeUnlock(patch) {
+    const prev = readUnlock();
+    const next = Object.assign({ unlocked: true, firstAt: new Date().toISOString() }, prev || {}, patch || {});
+    try { localStorage.setItem(UNLOCK_KEY, JSON.stringify(next)); } catch (_) { /* ignore */ }
+    if (!prev) onFirstUnlock(next);
+    return next;
+  }
+
+  function onFirstUnlock(_u) { /* analytics hook (GoatCounter variant) */ }
+
+  function isUnlocked() { return !!readUnlock(); }
+
+  // Handle ?unlocked=1 from the Lemon Squeezy redirect, then tidy the URL (other params kept).
+  function consumeUnlockParam() {
+    let p;
+    try { p = new URLSearchParams(window.location.search); } catch (_) { return false; }
+    if (p.get("unlocked") !== "1") return false;
+    writeUnlock({ redirectAt: new Date().toISOString(), method: (readUnlock() || {}).method || "checkout-redirect" });
+    try {
+      p.delete("unlocked");
+      const qs = p.toString();
+      window.history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + window.location.hash);
+    } catch (_) { /* ignore */ }
+    return true;
+  }
+
+  function validateLicenseRemote(key) {
+    const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 9000) : null;
+    return fetch(LS_VALIDATE_URL, {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+      body: "license_key=" + encodeURIComponent(key),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (res) {
+      return res.json().then(function (data) { return { http: res.status, data: data }; });
+    }).finally(function () { if (timer) clearTimeout(timer); });
+  }
+
+  function setLicenseMsg(form, cls, text) {
+    const msg = form.querySelector(".license-msg");
+    if (msg) { msg.className = "license-msg " + cls; msg.textContent = text; }
+  }
+
+  function onLicenseSubmit(e) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const input = form.querySelector(".license-input");
+    const btn = form.querySelector("button[type=submit]");
+    const key = ((input && input.value) || "").trim();
+    if (!key) { setLicenseMsg(form, "err", "Paste the license key from your Lemon Squeezy receipt email."); return; }
+    if (btn) btn.disabled = true;
+    setLicenseMsg(form, "", "Checking your key with Lemon Squeezy…");
+
+    validateLicenseRemote(key).then(function (r) {
+      const d = r.data || {};
+      const pid = d.meta && Number(d.meta.product_id);
+      if (d.valid === true && LS_ALLOWED_PRODUCT_IDS.indexOf(pid) !== -1) {
+        writeUnlock({ method: "license-key", licenseKey: key, verified: true, verifiedAt: new Date().toISOString(), productId: pid });
+        setLicenseMsg(form, "ok", "Key verified. Your full report is unlocked on this device.");
+        refreshView();
+      } else if (d.valid === true) {
+        setLicenseMsg(form, "err", "That key is valid but belongs to a different product. Need help? Email " + SUPPORT_EMAIL + ".");
+      } else {
+        setLicenseMsg(form, "err", "Lemon Squeezy did not accept that key (" + (d.error || ("HTTP " + r.http)) + "). Check for typos, or email " + SUPPORT_EMAIL + " with your order number.");
+      }
+    }).catch(function () {
+      // Network error, timeout, blocked request, or non-JSON response: honor-system fallback.
+      if (KEY_FORMAT.test(key)) {
+        writeUnlock({ method: "license-key", licenseKey: key, verified: false, storedAt: new Date().toISOString() });
+        setLicenseMsg(form, "ok", "We couldn't reach the license server, so your key was saved without verification and this device is unlocked.");
+        refreshView();
+      } else {
+        setLicenseMsg(form, "err", "We couldn't reach the license server and that doesn't look like a Lemon Squeezy key (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx). Try again or email " + SUPPORT_EMAIL + ".");
+      }
+    }).finally(function () { if (btn) btn.disabled = false; });
+  }
+
+  // Quietly upgrade a key saved during an outage to verified. Never auto-revokes.
+  function recheckUnverifiedKey() {
+    const u = readUnlock();
+    if (!u || !u.licenseKey || u.verified) return;
+    validateLicenseRemote(u.licenseKey).then(function (r) {
+      const d = r.data || {};
+      if (d.valid === true && LS_ALLOWED_PRODUCT_IDS.indexOf(Number(d.meta && d.meta.product_id)) !== -1) {
+        writeUnlock({ verified: true, verifiedAt: new Date().toISOString() });
+        renderUnlockStatus();
+      }
+    }).catch(function () { /* ignore */ });
+  }
+
+  // ---------- ranking (same weights and tie order as the free score) ----------
+  function rankedChecks() {
+    const gaps = QUESTIONS.filter(function (q) { return answers[q.id] === false; });
+    const live = QUESTIONS.filter(function (q) { return answers[q.id] === true; });
+    const byWeight = function (a, b) { return b.weight - a.weight; };
+    gaps.sort(byWeight);
+    live.sort(byWeight);
+    return gaps.map(function (q) { return { q: q, gap: true }; })
+      .concat(live.map(function (q) { return { q: q, gap: false }; }))
+      .map(function (r, i) {
+        r.rank = i + 1;
+        r.c = (REPORT && REPORT.checks[r.q.id]) || null;
+        return r;
+      });
+  }
+
+  function sourceList(c) {
+    return (c.sources || []).map(function (k) { return REPORT.sources[k]; }).filter(Boolean);
+  }
+
+  function todayStr() {
+    const d = new Date();
+    const pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+
+  function ulHtml(items) {
+    return "<ul>" + items.map(function (t) { return "<li>" + escapeHtml(t) + "</li>"; }).join("") + "</ul>";
+  }
+
+  function renderFullReport() {
+    const box = els.reportBody;
+    if (!box) return;
+    if (!REPORT) {
+      box.innerHTML = '<p class="license-msg err">The report content failed to load. Reload the page; if it persists, email ' +
+        escapeHtml(SUPPORT_EMAIL) + ".</p>";
+      return;
+    }
+    const s = compute();
+    const g = gradeFor(s.score);
+    const rows = rankedChecks();
+    const gapCount = rows.filter(function (r) { return r.gap; }).length;
+
+    let html = '<p class="report-meta">Score <strong>' + s.score + "/100</strong> (" + escapeHtml(g.label) + ") · " +
+      gapCount + " gap" + (gapCount === 1 ? "" : "s") + " · " + (rows.length - gapCount) + " in place · generated " + todayStr() + "</p>";
+    html += '<p class="small muted">Gaps come first, ranked by the same weights as your free score. Flows you already have follow, so you can QA them. ' +
+      "Work top-down: build gap #1, run its QA checklist, then move to the next.</p>";
+
+    html += '<table class="report-table"><thead><tr><th>#</th><th>Flow</th><th>Status</th><th>Points</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return "<tr><td>" + r.rank + '</td><td><a href="#rf-' + r.q.id + '">' + escapeHtml(r.c ? r.c.name : r.q.fixTitle) + "</a></td><td>" +
+          (r.gap ? '<span class="tag tag-gap">Gap</span>' : '<span class="tag tag-ok">In place</span>') + "</td><td>" +
+          (r.gap ? "+" : "") + r.q.weight + "</td></tr>";
+      }).join("") + "</tbody></table>";
+
+    rows.forEach(function (r) {
+      const c = r.c;
+      if (!c) return;
+      html += '<article class="report-item" id="rf-' + r.q.id + '">';
+      html += '<div class="impact">#' + r.rank + " · " + (r.gap ? "Gap: fix · +" + r.q.weight + " pts" : "In place: verify · " + r.q.weight + " pts") + "</div>";
+      html += "<h3>" + escapeHtml(c.name) + "</h3>";
+      if (!r.gap) html += '<p class="small muted">You answered "yes". Use the QA checklist below to confirm it actually works as intended.</p>';
+      html += "<h4>Why it matters</h4>" + c.why.map(function (p) { return "<p>" + escapeHtml(p) + "</p>"; }).join("");
+      html += "<h4>Recommended structure</h4>" + ulHtml(c.structure);
+      html += "<h4>Messages &amp; timing recipe</h4>" +
+        '<table class="report-table"><thead><tr><th>Step</th><th>Timing</th><th>What it does</th></tr></thead><tbody>' +
+        c.messages.map(function (m) {
+          return "<tr><td>" + escapeHtml(m.step) + "</td><td>" + escapeHtml(m.timing) + "</td><td>" + escapeHtml(m.content) + "</td></tr>";
+        }).join("") + "</tbody></table>" +
+        '<p class="small muted">Timings are starting points to test, not guarantees.</p>';
+      html += "<h4>Segmentation &amp; exclusions</h4>" + ulHtml(c.segmentation);
+      html += '<h4>QA checklist</h4><ul class="qa-list">' +
+        c.qa.map(function (t) { return "<li>" + escapeHtml(t) + "</li>"; }).join("") + "</ul>";
+      html += "<h4>How to measure</h4><p>" + escapeHtml(c.measure) + "</p>";
+      html += '<p class="small"><strong>Klaviyo-style setup (example; names vary by ESP):</strong> ' + escapeHtml(c.klaviyoTip) + "</p>";
+      const src = sourceList(c);
+      if (src.length) {
+        html += '<p class="small sources">Sources: ' + src.map(function (x) {
+          return '<a href="' + escapeHtml(x.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(x.label) + "</a>";
+        }).join(" · ") + "</p>";
+      }
+      html += "</article>";
+    });
+
+    html += '<p class="small muted">Inkrail is independent and not affiliated with Klaviyo or any ESP. Guidance is general and based on your yes/no answers, not on your account data.</p>';
+    box.innerHTML = html;
+  }
+
+  // ---------- exports ----------
+  function buildMarkdown() {
+    const s = compute();
+    const g = gradeFor(s.score);
+    const rows = rankedChecks();
+    const L = [];
+    L.push("# Inkrail Flow Score: Full Report", "");
+    L.push("- Score: **" + s.score + "/100** (" + g.label + ")");
+    L.push("- Generated: " + todayStr());
+    L.push("- Gaps first, ranked by Flow Score weight; in-place flows follow for QA.", "");
+    L.push("| # | Flow | Status | Points |", "|---|---|---|---|");
+    rows.forEach(function (r) {
+      L.push("| " + r.rank + " | " + (r.c ? r.c.name : r.q.fixTitle) + " | " + (r.gap ? "Gap" : "In place") + " | " + (r.gap ? "+" : "") + r.q.weight + " |");
+    });
+    L.push("");
+    rows.forEach(function (r) {
+      const c = r.c;
+      if (!c) return;
+      L.push("## " + r.rank + ". " + c.name + " (" + (r.gap ? "Gap, +" + r.q.weight + " pts" : "In place, verify") + ")", "");
+      L.push("### Why it matters", "");
+      c.why.forEach(function (p) { L.push(p, ""); });
+      L.push("### Recommended structure", "");
+      c.structure.forEach(function (t) { L.push("- " + t.replace(/^•\s*/, "")); });
+      L.push("", "### Messages & timing recipe", "", "| Step | Timing | What it does |", "|---|---|---|");
+      c.messages.forEach(function (m) { L.push("| " + m.step + " | " + m.timing + " | " + m.content.replace(/\|/g, "/") + " |"); });
+      L.push("", "_Timings are starting points to test, not guarantees._", "", "### Segmentation & exclusions", "");
+      c.segmentation.forEach(function (t) { L.push("- " + t); });
+      L.push("", "### QA checklist", "");
+      c.qa.forEach(function (t) { L.push("- [ ] " + t); });
+      L.push("", "### How to measure", "", c.measure, "");
+      L.push("**Klaviyo-style setup (example; names vary by ESP):** " + c.klaviyoTip, "");
+      const src = sourceList(c);
+      if (src.length) {
+        L.push("Sources:");
+        src.forEach(function (x) { L.push("- " + x.label + ": " + x.url); });
+        L.push("");
+      }
+    });
+    L.push("---", "Inkrail is independent and not affiliated with Klaviyo or any ESP. Support: " + SUPPORT_EMAIL);
+    return L.join("\n") + "\n";
+  }
+
+  function csvCell(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function buildCsv() {
+    const out = [["rank", "check_id", "flow", "status", "points", "section", "step", "timing", "item"]];
+    rankedChecks().forEach(function (r) {
+      const c = r.c;
+      if (!c) return;
+      const base = [r.rank, r.q.id, c.name, r.gap ? "gap" : "in_place", r.q.weight];
+      const add = function (section, step, timing, item) { out.push(base.concat([section, step, timing, item])); };
+      c.why.forEach(function (t) { add("why", "", "", t); });
+      c.structure.forEach(function (t) { add("structure", "", "", t.replace(/^•\s*/, "")); });
+      c.messages.forEach(function (m) { add("message", m.step, m.timing, m.content); });
+      c.segmentation.forEach(function (t) { add("segmentation", "", "", t); });
+      c.qa.forEach(function (t) { add("qa", "", "", t); });
+      add("measure", "", "", c.measure);
+      add("klaviyo_style_example", "", "", c.klaviyoTip);
+      sourceList(c).forEach(function (x) { add("source", "", "", x.label + " " + x.url); });
+    });
+    return "\uFEFF" + out.map(function (row) { return row.map(csvCell).join(","); }).join("\r\n") + "\r\n";
+  }
+
+  function download(filename, mime, text) {
+    try {
+      const blob = new Blob([text], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    } catch (_) {
+      window.alert("Download failed in this browser. Use Print / Save as PDF instead, or email " + SUPPORT_EMAIL + ".");
+    }
+  }
+
+  function renderUnlockStatus() {
+    const el = els.unlockStatus;
+    if (!el) return;
+    const u = readUnlock();
+    if (!u) { el.textContent = ""; return; }
+    if (u.licenseKey && u.verified) {
+      el.textContent = "Unlocked on this device · license key verified with Lemon Squeezy.";
+    } else if (u.licenseKey) {
+      el.textContent = "Unlocked on this device · license key saved (not yet verified; we'll re-check automatically).";
+    } else {
+      el.textContent = "Unlocked on this device after checkout. Add your license key below so you can open the report on other devices.";
+    }
+  }
+
+  // Toggle locked / unlocked UI around the results view.
+  function applyUnlockView() {
+    const unlocked = isUnlocked();
+    if (els.fullReport) els.fullReport.classList.toggle("hidden", !unlocked);
+    if (els.lockedCard) els.lockedCard.classList.toggle("hidden", unlocked);
+    if (els.waitlistCard) els.waitlistCard.classList.toggle("hidden", unlocked);
+    if (els.freeCard) els.freeCard.classList.toggle("hidden", unlocked);
+    if (unlocked) {
+      renderUnlockStatus();
+      renderFullReport();
+    }
+  }
+
+  function refreshView() {
+    if (index >= QUESTIONS.length && answeredCount() === QUESTIONS.length) {
+      showResults();
+    } else {
+      renderQuestion();
+    }
+  }
+
+  window.InkrailFlowReport = { buildMarkdown: buildMarkdown, buildCsv: buildCsv, isUnlocked: isUnlocked };
+  /* =================== end full report unlock (v1) =================== */
 
   function loadState() {
     try {
@@ -157,6 +484,8 @@
     }
     els.quiz.classList.remove("hidden");
     els.results.classList.add("hidden");
+    if (els.unlockBanner) els.unlockBanner.classList.toggle("hidden", !isUnlocked());
+    if (els.restoreBox) els.restoreBox.classList.toggle("hidden", isUnlocked());
 
     const q = QUESTIONS[index];
     const done = answeredCount();
@@ -194,6 +523,8 @@
     els.quiz.classList.add("hidden");
     els.results.classList.remove("hidden");
     els.progressFill.style.width = "100%";
+    if (els.unlockBanner) els.unlockBanner.classList.add("hidden");
+    if (els.restoreBox) els.restoreBox.classList.add("hidden");
 
     els.scoreNum.textContent = String(score);
     els.scoreRing.style.setProperty("--pct", String(score));
@@ -218,7 +549,7 @@
         renderFixItem({
           impact: "Export · locked",
           fixTitle: "Full ranked fix list + printable export",
-          fixWhy: "CSV/Markdown export, timing recipes, and segment rules — available when checkout goes live."
+          fixWhy: "CSV/Markdown export, timing recipes, and segment rules — included in the full report."
         }) +
         renderFixItem({
           impact: "Playbook · locked",
@@ -243,6 +574,7 @@
       }));
     } catch (_) { /* ignore */ }
 
+    applyUnlockView();
     els.results.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -302,12 +634,12 @@
     }
     const entry = saveWaitlistIntent(email);
     els.waitlistMsg.className = "waitlist-msg ok";
-    els.waitlistMsg.textContent = "Thanks — we'll follow up. Intent saved on this device.";
+    els.waitlistMsg.textContent = "Thanks — your email app should open with a prefilled message. Send it and we'll reply with the link.";
 
     // Also open mailto so operator receives intent (static hosting cannot POST)
-    const subject = encodeURIComponent("Inkrail Flow Score waitlist");
+    const subject = encodeURIComponent("Inkrail Flow Score: full report link");
     const body = encodeURIComponent(
-      "Please add me to the Flow Score waitlist.\n\n" +
+      "Please send me the Flow Score full report link.\n\n" +
       "Email: " + entry.email + "\n" +
       "Teaser score: " + entry.score + "\n" +
       "Time: " + entry.at + "\n"
@@ -326,7 +658,24 @@
   els.btnBack.addEventListener("click", goBack);
   if (els.btnRestart) els.btnRestart.addEventListener("click", restart);
   if (els.waitlistForm) els.waitlistForm.addEventListener("submit", onWaitlistSubmit);
+  Array.prototype.forEach.call(document.querySelectorAll("form.license-form"), function (f) {
+    f.addEventListener("submit", onLicenseSubmit);
+  });
+  const btnMd = document.getElementById("btn-export-md");
+  const btnCsv = document.getElementById("btn-export-csv");
+  const btnPrint = document.getElementById("btn-print");
+  const btnRestart2 = document.getElementById("btn-restart-2");
+  if (btnMd) btnMd.addEventListener("click", function () {
+    download("inkrail-flow-report-" + todayStr() + ".md", "text/markdown;charset=utf-8", buildMarkdown());
+  });
+  if (btnCsv) btnCsv.addEventListener("click", function () {
+    download("inkrail-flow-report-" + todayStr() + ".csv", "text/csv;charset=utf-8", buildCsv());
+  });
+  if (btnPrint) btnPrint.addEventListener("click", function () { window.print(); });
+  if (btnRestart2) btnRestart2.addEventListener("click", restart);
 
+  consumeUnlockParam();
+  recheckUnverifiedKey();
   loadState();
   // If previously completed, show results; else resume quiz
   if (index >= QUESTIONS.length && answeredCount() === QUESTIONS.length) {
