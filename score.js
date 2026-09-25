@@ -1,6 +1,6 @@
 /**
- * Inkrail Flow Score v0 — client-side weighted rubric (teaser) + full report unlock (v1)
- * No secrets / no Lemon Squeezy API keys. Full report content: report-content.js.
+ * Inkrail Flow Score v0 — free client-side weighted rubric + full report.
+ * Full report content: report-content.js.
  */
 (function () {
   "use strict";
@@ -81,7 +81,6 @@
   ];
 
   const STORAGE_KEY = "inkrail_flow_score_v0";
-  const WAITLIST_KEY = "inkrail_waitlist_intents";
 
   const els = {
     quiz: document.getElementById("quiz"),
@@ -99,23 +98,14 @@
     gradeEl: document.getElementById("grade"),
     scoreBlurb: document.getElementById("score-blurb"),
     freeFixes: document.getElementById("free-fixes"),
-    lockedFixes: document.getElementById("locked-fixes"),
-    waitlistForm: document.getElementById("waitlist-form"),
-    waitlistEmail: document.getElementById("waitlist-email"),
-    waitlistMsg: document.getElementById("waitlist-msg"),
     freeCard: document.getElementById("free-card"),
-    lockedCard: document.getElementById("locked-card"),
-    waitlistCard: document.getElementById("waitlist"),
     fullReport: document.getElementById("full-report"),
     reportBody: document.getElementById("report-body"),
-    unlockStatus: document.getElementById("unlock-status"),
-    unlockBanner: document.getElementById("unlock-banner"),
-    restoreBox: document.getElementById("restore-box")
   };
 
   // GoatCounter events (no answers, scores, or emails are ever sent).
-  // Event names: event-quiz-complete / event-cta-checkout, with "-gads" appended
-  // when the browser session arrived from a Google Ads click (utm_source=google&utm_medium=cpc or gclid).
+  // Event name: event-quiz-complete, with "-gads" appended when the browser
+  // session arrived from a Google Ads click (utm_source=google&utm_medium=cpc or gclid).
   function trafficSuffix() {
     try {
       const p = new URLSearchParams(window.location.search);
@@ -138,131 +128,8 @@
   let answers = {}; // id -> boolean
   let index = 0;
 
-  /* ===================== Full report unlock (v1) =====================
-   * Honest scope: this is a static site. The unlock is enforced only in this browser
-   * (localStorage). ?unlocked=1 (the Lemon Squeezy post-purchase redirect) unlocks this
-   * device on trust. A license key is checked against Lemon Squeezy's public License API
-   * (validate only, no API key, never "activate"); if that call cannot be completed, a
-   * well-formed key is accepted and marked unverified. Report content is not secret.
-   */
-  const UNLOCK_KEY = "inkrail_flow_unlock_v1";
-  const LS_VALIDATE_URL = "https://api.lemonsqueezy.com/v1/licenses/validate";
-  const LS_ALLOWED_PRODUCT_IDS = [1379493]; // live "Flow Score full report" product
   const SUPPORT_EMAIL = "inkrailco@gmail.com";
-  const KEY_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const REPORT = window.INKRAIL_REPORT_CONTENT || null;
-
-  function readUnlock() {
-    try {
-      const u = JSON.parse(localStorage.getItem(UNLOCK_KEY) || "null");
-      return u && u.unlocked === true ? u : null;
-    } catch (_) { return null; }
-  }
-
-  function writeUnlock(patch) {
-    const prev = readUnlock();
-    const next = Object.assign({ unlocked: true, firstAt: new Date().toISOString() }, prev || {}, patch || {});
-    try { localStorage.setItem(UNLOCK_KEY, JSON.stringify(next)); } catch (_) { /* ignore */ }
-    if (!prev) onFirstUnlock(next);
-    return next;
-  }
-
-  // GoatCounter: fire "event-unlock" once per device, the first time it unlocks (no key, email, or answers sent).
-  // Fixed path (no "-gads" suffix): the checkout tab is opened with noopener, so session attribution
-  // typically does not carry over into the post-purchase redirect tab. count.js loads async, so retry briefly.
-  function onFirstUnlock(u) {
-    let tries = 0;
-    (function send() {
-      try {
-        if (window.goatcounter && typeof window.goatcounter.count === "function") {
-          window.goatcounter.count({ path: "event-unlock", title: "unlock (" + (u.method || "unknown") + ")", event: true });
-          return;
-        }
-      } catch (_) { return; /* analytics must never break the page */ }
-      if (++tries < 40) setTimeout(send, 250);
-    })();
-  }
-
-  function isUnlocked() { return !!readUnlock(); }
-
-  // Handle ?unlocked=1 from the Lemon Squeezy redirect, then tidy the URL (other params kept).
-  function consumeUnlockParam() {
-    let p;
-    try { p = new URLSearchParams(window.location.search); } catch (_) { return false; }
-    if (p.get("unlocked") !== "1") return false;
-    writeUnlock({ redirectAt: new Date().toISOString(), method: (readUnlock() || {}).method || "checkout-redirect" });
-    try {
-      p.delete("unlocked");
-      const qs = p.toString();
-      window.history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + window.location.hash);
-    } catch (_) { /* ignore */ }
-    return true;
-  }
-
-  function validateLicenseRemote(key) {
-    const ctrl = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 9000) : null;
-    return fetch(LS_VALIDATE_URL, {
-      method: "POST",
-      headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-      body: "license_key=" + encodeURIComponent(key),
-      signal: ctrl ? ctrl.signal : undefined
-    }).then(function (res) {
-      return res.json().then(function (data) { return { http: res.status, data: data }; });
-    }).finally(function () { if (timer) clearTimeout(timer); });
-  }
-
-  function setLicenseMsg(form, cls, text) {
-    const msg = form.querySelector(".license-msg");
-    if (msg) { msg.className = "license-msg " + cls; msg.textContent = text; }
-  }
-
-  function onLicenseSubmit(e) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const input = form.querySelector(".license-input");
-    const btn = form.querySelector("button[type=submit]");
-    const key = ((input && input.value) || "").trim();
-    if (!key) { setLicenseMsg(form, "err", "Paste the license key from your Lemon Squeezy receipt email."); return; }
-    if (btn) btn.disabled = true;
-    setLicenseMsg(form, "", "Checking your key with Lemon Squeezy…");
-
-    validateLicenseRemote(key).then(function (r) {
-      const d = r.data || {};
-      const pid = d.meta && Number(d.meta.product_id);
-      if (d.valid === true && LS_ALLOWED_PRODUCT_IDS.indexOf(pid) !== -1) {
-        writeUnlock({ method: "license-key", licenseKey: key, verified: true, verifiedAt: new Date().toISOString(), productId: pid });
-        setLicenseMsg(form, "ok", "Key verified. Your full report is unlocked on this device.");
-        refreshView();
-      } else if (d.valid === true) {
-        setLicenseMsg(form, "err", "That key is valid but belongs to a different product. Need help? Email " + SUPPORT_EMAIL + ".");
-      } else {
-        setLicenseMsg(form, "err", "Lemon Squeezy did not accept that key (" + (d.error || ("HTTP " + r.http)) + "). Check for typos, or email " + SUPPORT_EMAIL + " with your order number.");
-      }
-    }).catch(function () {
-      // Network error, timeout, blocked request, or non-JSON response: honor-system fallback.
-      if (KEY_FORMAT.test(key)) {
-        writeUnlock({ method: "license-key", licenseKey: key, verified: false, storedAt: new Date().toISOString() });
-        setLicenseMsg(form, "ok", "We couldn't reach the license server, so your key was saved without verification and this device is unlocked.");
-        refreshView();
-      } else {
-        setLicenseMsg(form, "err", "We couldn't reach the license server and that doesn't look like a Lemon Squeezy key (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx). Try again or email " + SUPPORT_EMAIL + ".");
-      }
-    }).finally(function () { if (btn) btn.disabled = false; });
-  }
-
-  // Quietly upgrade a key saved during an outage to verified. Never auto-revokes.
-  function recheckUnverifiedKey() {
-    const u = readUnlock();
-    if (!u || !u.licenseKey || u.verified) return;
-    validateLicenseRemote(u.licenseKey).then(function (r) {
-      const d = r.data || {};
-      if (d.valid === true && LS_ALLOWED_PRODUCT_IDS.indexOf(Number(d.meta && d.meta.product_id)) !== -1) {
-        writeUnlock({ verified: true, verifiedAt: new Date().toISOString() });
-        renderUnlockStatus();
-      }
-    }).catch(function () { /* ignore */ });
-  }
 
   // ---------- ranking (same weights and tie order as the free score) ----------
   function rankedChecks() {
@@ -298,7 +165,7 @@
     const box = els.reportBody;
     if (!box) return;
     if (!REPORT) {
-      box.innerHTML = '<p class="license-msg err">The report content failed to load. Reload the page; if it persists, email ' +
+      box.innerHTML = '<p class="report-error err">The report content failed to load. Reload the page; if it persists, email ' +
         escapeHtml(SUPPORT_EMAIL) + ".</p>";
       return;
     }
@@ -433,43 +300,7 @@
     }
   }
 
-  function renderUnlockStatus() {
-    const el = els.unlockStatus;
-    if (!el) return;
-    const u = readUnlock();
-    if (!u) { el.textContent = ""; return; }
-    if (u.licenseKey && u.verified) {
-      el.textContent = "Unlocked on this device · license key verified with Lemon Squeezy.";
-    } else if (u.licenseKey) {
-      el.textContent = "Unlocked on this device · license key saved (not yet verified; we'll re-check automatically).";
-    } else {
-      el.textContent = "Unlocked on this device after checkout. Add your license key below so you can open the report on other devices.";
-    }
-  }
-
-  // Toggle locked / unlocked UI around the results view.
-  function applyUnlockView() {
-    const unlocked = isUnlocked();
-    if (els.fullReport) els.fullReport.classList.toggle("hidden", !unlocked);
-    if (els.lockedCard) els.lockedCard.classList.toggle("hidden", unlocked);
-    if (els.waitlistCard) els.waitlistCard.classList.toggle("hidden", unlocked);
-    if (els.freeCard) els.freeCard.classList.toggle("hidden", unlocked);
-    if (unlocked) {
-      renderUnlockStatus();
-      renderFullReport();
-    }
-  }
-
-  function refreshView() {
-    if (index >= QUESTIONS.length && answeredCount() === QUESTIONS.length) {
-      showResults();
-    } else {
-      renderQuestion();
-    }
-  }
-
-  window.InkrailFlowReport = { buildMarkdown: buildMarkdown, buildCsv: buildCsv, isUnlocked: isUnlocked };
-  /* =================== end full report unlock (v1) =================== */
+  window.InkrailFlowReport = { buildMarkdown: buildMarkdown, buildCsv: buildCsv };
 
   function loadState() {
     try {
@@ -520,9 +351,6 @@
     }
     els.quiz.classList.remove("hidden");
     els.results.classList.add("hidden");
-    if (els.unlockBanner) els.unlockBanner.classList.toggle("hidden", !isUnlocked());
-    if (els.restoreBox) els.restoreBox.classList.toggle("hidden", isUnlocked());
-
     const q = QUESTIONS[index];
     const done = answeredCount();
     const pct = Math.round((done / QUESTIONS.length) * 100);
@@ -559,8 +387,6 @@
     els.quiz.classList.add("hidden");
     els.results.classList.remove("hidden");
     els.progressFill.style.width = "100%";
-    if (els.unlockBanner) els.unlockBanner.classList.add("hidden");
-    if (els.restoreBox) els.restoreBox.classList.add("hidden");
 
     els.scoreNum.textContent = String(score);
     els.scoreRing.style.setProperty("--pct", String(score));
@@ -568,37 +394,12 @@
     els.gradeEl.className = "grade " + g.cls;
     els.scoreBlurb.textContent = g.blurb;
 
-    const free = missing.slice(0, 3);
-    const locked = missing.slice(3);
-
-    if (free.length === 0) {
+    if (missing.length === 0) {
       els.freeFixes.innerHTML =
-        '<li><p class="fix-title">No critical gaps from this checklist</p>' +
-        '<p class="fix-why">Unlock the full report for export, timing recipes, and deeper QA checks.</p></li>';
+        '<li><p class="fix-title">No gaps from this checklist</p>' +
+        '<p class="fix-why">Use the full report below to QA every flow and keep the system healthy.</p></li>';
     } else {
-      els.freeFixes.innerHTML = free.map(renderFixItem).join("");
-    }
-
-    if (locked.length === 0) {
-      // Still show lock UI for export + full report CTA even if few gaps
-      els.lockedFixes.innerHTML =
-        renderFixItem({
-          impact: "Export · locked",
-          fixTitle: "Full ranked fix list + printable export",
-          fixWhy: "CSV/Markdown export, timing recipes, and segment rules — included in the full report."
-        }) +
-        renderFixItem({
-          impact: "Playbook · locked",
-          fixTitle: "Per-flow QA checklist",
-          fixWhy: "Trigger, delay, exclusion, and deliverability checks for each lifecycle flow."
-        });
-    } else {
-      els.lockedFixes.innerHTML = locked.map(renderFixItem).join("") +
-        renderFixItem({
-          impact: "Export · locked",
-          fixTitle: "One-click report export",
-          fixWhy: "Download your scored gaps as Markdown/CSV for your ESP backlog."
-        });
+      els.freeFixes.innerHTML = missing.slice(0, 3).map(renderFixItem).join("");
     }
 
     try {
@@ -610,7 +411,8 @@
       }));
     } catch (_) { /* ignore */ }
 
-    applyUnlockView();
+    els.fullReport.classList.remove("hidden");
+    renderFullReport();
     els.results.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -641,54 +443,6 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function saveWaitlistIntent(email) {
-    const entry = {
-      email: email,
-      source: "flow-score-teaser",
-      score: compute().score,
-      at: new Date().toISOString(),
-      tz: "Asia/Taipei"
-    };
-    let list = [];
-    try {
-      list = JSON.parse(localStorage.getItem(WAITLIST_KEY) || "[]");
-      if (!Array.isArray(list)) list = [];
-    } catch (_) {
-      list = [];
-    }
-    list.push(entry);
-    try {
-      localStorage.setItem(WAITLIST_KEY, JSON.stringify(list));
-    } catch (_) { /* ignore */ }
-    return entry;
-  }
-
-  function onWaitlistSubmit(e) {
-    e.preventDefault();
-    const email = (els.waitlistEmail.value || "").trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      els.waitlistMsg.className = "waitlist-msg err";
-      els.waitlistMsg.textContent = "Enter a valid email.";
-      return;
-    }
-    const entry = saveWaitlistIntent(email);
-    els.waitlistMsg.className = "waitlist-msg ok";
-    els.waitlistMsg.textContent = "Thanks — your email app should open with a prefilled message. Send it and we'll reply with the link.";
-
-    // Also open mailto so operator receives intent (static hosting cannot POST)
-    const subject = encodeURIComponent("Inkrail Flow Score: full report link");
-    const body = encodeURIComponent(
-      "Please send me the Flow Score full report link.\n\n" +
-      "Email: " + entry.email + "\n" +
-      "Teaser score: " + entry.score + "\n" +
-      "Time: " + entry.at + "\n"
-    );
-    // Delay slightly so the thanks message is visible before mail client opens
-    setTimeout(function () {
-      window.location.href = "mailto:inkrailco@gmail.com?subject=" + subject + "&body=" + body;
-    }, 250);
-  }
-
   // Wire events
   if (!els.quiz) return;
 
@@ -696,12 +450,6 @@
   els.btnNo.addEventListener("click", function () { answer(false); });
   els.btnBack.addEventListener("click", goBack);
   if (els.btnRestart) els.btnRestart.addEventListener("click", restart);
-  if (els.waitlistForm) els.waitlistForm.addEventListener("submit", onWaitlistSubmit);
-  const ctaCheckout = document.getElementById("cta-checkout");
-  if (ctaCheckout) ctaCheckout.addEventListener("click", function () { gcEvent("cta-checkout"); });
-  Array.prototype.forEach.call(document.querySelectorAll("form.license-form"), function (f) {
-    f.addEventListener("submit", onLicenseSubmit);
-  });
   const btnMd = document.getElementById("btn-export-md");
   const btnCsv = document.getElementById("btn-export-csv");
   const btnPrint = document.getElementById("btn-print");
@@ -715,8 +463,6 @@
   if (btnPrint) btnPrint.addEventListener("click", function () { window.print(); });
   if (btnRestart2) btnRestart2.addEventListener("click", restart);
 
-  consumeUnlockParam();
-  recheckUnverifiedKey();
   loadState();
   // If previously completed, show results; else resume quiz
   if (index >= QUESTIONS.length && answeredCount() === QUESTIONS.length) {
@@ -724,26 +470,5 @@
   } else {
     if (index > answeredCount()) index = answeredCount();
     renderQuestion();
-  }
-})();
-
-/* Checkout wiring: set INKRAIL_CHECKOUT_URL to the live Lemon Squeezy checkout when ready. */
-window.INKRAIL_CHECKOUT_URL = window.INKRAIL_CHECKOUT_URL || "https://inkrail.lemonsqueezy.com/checkout/buy/baf7f0ed-9ced-4757-bfb7-f11e23b7a844";
-(function wireCheckout() {
-  function apply() {
-    var btn = document.getElementById("cta-checkout");
-    var note = document.getElementById("cta-checkout-note");
-    if (!btn) return;
-    if (window.INKRAIL_CHECKOUT_URL) {
-      btn.setAttribute("href", window.INKRAIL_CHECKOUT_URL);
-      btn.setAttribute("rel", "noopener noreferrer");
-      btn.setAttribute("target", "_blank");
-      if (note) note.textContent = "Secure checkout on Lemon Squeezy.";
-    }
-  }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", apply);
-  } else {
-    apply();
   }
 })();

@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Inkrail — Flow Score: free teaser that scores your DTC lifecycle email flows and ranks top fixes." />
+  <meta name="description" content="Inkrail — free Klaviyo/email flow checklist with a full report." />
   <title>Inkrail — Flow Score</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -19,15 +19,15 @@
     </nav>
 
     <header class="hero">
-      <span class="badge">Free teaser</span>
+      <span class="badge">Free checklist</span>
       <h1>Know which lifecycle flows are leaking revenue</h1>
       <p class="lede">
-        Inkrail Flow Score is a quick interactive audit for DTC / ecommerce email:
-        answer eight yes/no checks, get a 0–100 score, and see ranked top fixes.
+        Inkrail Flow Score is a free interactive checklist for DTC / ecommerce email:
+        answer eight yes/no checks, get a 0–100 score, and see the full ranked report.
       </p>
       <div class="actions">
         <a class="btn btn-primary" href="score.html">Get your Flow Score →</a>
-        <a class="btn btn-ghost" href="#full-report">Full report: US$29</a>
+        <a class="btn btn-ghost" href="#full-report">Free checklist — full report</a>
       </div>
     </header>
 
@@ -35,28 +35,17 @@
       <h2>What you get (free)</h2>
       <ul class="checklist-mini">
         <li>Weighted 0–100 score across welcome, cart, post-purchase, winback, and more</li>
-        <li>Ranked top 3 fixes — not a bare “buy the checklist” wall</li>
+        <li>Full 8-item report with ranked fixes, timing, segments, QA, and exports</li>
         <li>~2 minutes · mobile-friendly · no signup required for the score</li>
       </ul>
     </section>
 
     <section class="card" id="full-report">
-      <h2>Full report: US$29 one-time</h2>
-      <p>Complete ranked fix list + export: <strong>US$29</strong> one-time unlock via Lemon Squeezy, available now from your Flow Score results. Take the free score first, then decide. We never log into your ESP.</p>
+      <h2>Free Klaviyo/email flow checklist — full report free</h2>
+      <p>Complete ranked fix list, timing recipes, segment rules, QA checklists, and Markdown/CSV exports appear after the eight checks. We never log into your ESP.</p>
       <div class="actions">
-        <a class="btn btn-primary" href="score.html">Try the free teaser</a>
+        <a class="btn btn-primary" href="score.html">Run the free checklist →</a>
       </div>
-    </section>
-
-    <section class="card" id="waitlist">
-      <h2>Want the link for later?</h2>
-      <p class="muted">Enter your email and your email app will open a prefilled message to us; send it and we’ll reply with the link.</p>
-      <form class="waitlist-form" id="home-waitlist-form">
-        <label class="hidden" for="home-waitlist-email">Email</label>
-        <input type="email" id="home-waitlist-email" name="email" placeholder="you@brand.com" required autocomplete="email" />
-        <button type="submit" class="btn btn-primary">Email me the link</button>
-      </form>
-      <p class="waitlist-msg" id="home-waitlist-msg" role="status"></p>
     </section>
 
         <footer>
@@ -64,37 +53,7 @@
       <p><a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="mailto:inkrailco@gmail.com">inkrailco@gmail.com</a></p>
     </footer>
   </div>
-  <script>
-    (function () {
-      var form = document.getElementById("home-waitlist-form");
-      var input = document.getElementById("home-waitlist-email");
-      var msg = document.getElementById("home-waitlist-msg");
-      if (!form) return;
-      form.addEventListener("submit", function (e) {
-        e.preventDefault();
-        var email = (input.value || "").trim();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          msg.className = "waitlist-msg err";
-          msg.textContent = "Enter a valid email.";
-          return;
-        }
-        var entry = { email: email, source: "index-waitlist", at: new Date().toISOString() };
-        try {
-          var list = JSON.parse(localStorage.getItem("inkrail_waitlist_intents") || "[]");
-          if (!Array.isArray(list)) list = [];
-          list.push(entry);
-          localStorage.setItem("inkrail_waitlist_intents", JSON.stringify(list));
-        } catch (_) {}
-        msg.className = "waitlist-msg ok";
-        msg.textContent = "Thanks — your email app should open with a prefilled message. Send it and we'll reply with the link.";
-        var subject = encodeURIComponent("Inkrail Flow Score: full report link");
-        var body = encodeURIComponent("Please send me the Flow Score full report link.\n\nEmail: " + email + "\n");
-        setTimeout(function () {
-          window.location.href = "mailto:inkrailco@gmail.com?subject=" + subject + "&body=" + body;
-        }, 250);
-      });
-    })();
-  </script>
+
   <!-- GoatCounter: cookieless aggregate analytics. -->
   <script data-goatcounter="https://inkrail.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>

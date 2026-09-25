@@ -3,22 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Inkrail Flow Score — free teaser: score your DTC lifecycle email flows and see ranked top fixes." />
+  <meta name="description" content="Inkrail Flow Score — free Klaviyo/email flow checklist with a full 8-item report and exports." />
   <title>Flow Score — Inkrail</title>
   <link rel="stylesheet" href="styles.css" />
   <style>
-    /* Full report unlock (v1). Kept inline so styles.css stays unchanged. */
-    .unlock-banner { background: var(--accent-soft, #ede9fe); border-radius: 10px; padding: 0.7rem 0.9rem; margin: 0 0 1rem; font-size: 0.95rem; }
-    .license-form { margin-top: 0.75rem; text-align: left; }
-    .license-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.3rem; }
-    .license-input { flex: 1 1 14rem; min-width: 0; padding: 0.65rem 0.75rem; border: 1px solid var(--line, #e6e4de); border-radius: 10px; font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; }
-    .license-msg { font-size: 0.9rem; min-height: 1.2em; margin: 0.4rem 0 0; }
-    .license-msg.ok { color: var(--good, #15803d); }
-    .license-msg.err { color: var(--bad, #b91c1c); }
-    details.restore summary { cursor: pointer; color: var(--accent, #5b21b6); font-size: 0.92rem; }
-    .buyer-steps { padding-left: 1.2rem; margin: 0.5rem 0; }
-    .buyer-steps li { margin: 0.3rem 0; }
-    .unlock-status { font-weight: 600; color: var(--good, #15803d); margin: 0.25rem 0 0.5rem; }
     .report-meta { font-size: 1rem; margin: 0 0 0.4rem; }
     .report-table { width: 100%; border-collapse: collapse; margin: 0.6rem 0 0.4rem; font-size: 0.9rem; }
     .report-table th, .report-table td { border-bottom: 1px solid var(--line, #e6e4de); padding: 0.4rem 0.35rem; text-align: left; vertical-align: top; }
@@ -37,8 +25,7 @@
     .sources a { word-break: break-word; }
     @media print {
       body { background: #fff; }
-      .nav, .hero, .progress-bar, #quiz, #restore-box, #free-card, #locked-card, #waitlist, footer,
-      .no-print, .unlock-status, .actions, .license-form, details.restore { display: none !important; }
+      .nav, .hero, .progress-bar, #quiz, #free-card, footer, .no-print, .actions { display: none !important; }
       .card { box-shadow: none; border: none; padding: 0; }
       .wrap { max-width: none; padding: 0; }
       .report-item { break-inside: auto; }
@@ -60,15 +47,14 @@
     </nav>
 
     <header class="hero">
-      <span class="badge">Free teaser · v0</span>
+      <span class="badge">Free checklist · v0</span>
       <h1>Lifecycle Flow Score</h1>
-      <p class="lede">Eight yes/no checks. Instant 0–100 score. Ranked fixes — not a checklist paywall.</p>
+      <p class="lede">Eight yes/no checks. Instant 0–100 score. Full ranked fixes, timing recipes, QA, and exports — free.</p>
     </header>
 
     <div class="progress-bar" aria-hidden="true"><span id="progress-fill"></span></div>
 
     <section id="quiz" class="card question" aria-live="polite">
-      <p class="unlock-banner hidden" id="unlock-banner"><strong>Full report unlocked on this device.</strong> Answer the 8 checks (about 2 minutes) and your full report appears right after.</p>
       <div class="q-meta" id="q-meta">Question 1 of 8</div>
       <h2 id="q-title">Loading…</h2>
       <p class="hint" id="q-hint"></p>
@@ -81,21 +67,6 @@
         <span class="small muted">Answers stay on this device</span>
       </div>
     </section>
-
-    <div class="card hidden" id="restore-box">
-      <details class="restore">
-        <summary>Already bought the full report? Restore it with your license key</summary>
-        <form class="license-form" novalidate>
-            <label class="small" for="license-key-restore">License key (from your Lemon Squeezy receipt email)</label>
-            <div class="license-row">
-              <input type="text" class="license-input" id="license-key-restore" name="license_key" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
-              <button type="submit" class="btn btn-ghost">Unlock with key</button>
-            </div>
-            <p class="license-msg" role="status"></p>
-          </form>
-        <p class="small muted">After unlocking, answer the 8 checks here and your full report appears. Lost your key? Email <a href="mailto:inkrailco@gmail.com">inkrailco@gmail.com</a>.</p>
-      </details>
-    </div>
 
     <section id="results" class="hidden" aria-live="polite">
       <div class="card">
@@ -112,86 +83,22 @@
       </div>
 
       <div class="card" id="free-card">
-        <h2>Top fixes (free)</h2>
-        <p class="muted small">Ranked by weighted revenue / risk impact from your gaps.</p>
+        <h2>Your top fixes</h2>
+        <p class="muted small">Ranked by weighted revenue / risk impact from your gaps. The complete report is below.</p>
         <ol class="fix-list" id="free-fixes"></ol>
       </div>
 
-      <div class="card" id="locked-card">
-        <h2>Full report</h2>
-        <p class="muted small">Remaining ranked fixes + export locked in this teaser.</p>
-        <div class="locked-panel">
-          <div class="blurred" aria-hidden="true">
-            <ol class="fix-list" id="locked-fixes"></ol>
-          </div>
-          <div class="locked-overlay">
-            <h3>Unlock full report — $29</h3>
-            <p>Complete ranked list, timing recipes, and plain-text export. Self-serve license unlock via Lemon Squeezy (no ESP login by us).</p>
-            <a class="btn btn-primary" id="cta-checkout" href="https://inkrail.lemonsqueezy.com/checkout/buy/baf7f0ed-9ced-4757-bfb7-f11e23b7a844" rel="noopener noreferrer" target="_blank">Unlock full report — $29</a>
-            <p class="small muted" id="cta-checkout-note" style="margin-top:0.75rem;">Secure checkout on Lemon Squeezy opens in a new tab.</p>
-            <p class="small"><a href="#waitlist">Keep the free top 3 for now</a></p>
-          </div>
-        </div>
-        <details class="restore">
-          <summary>Already bought? Unlock with your license key</summary>
-          <form class="license-form" novalidate>
-            <label class="small" for="license-key-locked">License key (from your Lemon Squeezy receipt email)</label>
-            <div class="license-row">
-              <input type="text" class="license-input" id="license-key-locked" name="license_key" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
-              <button type="submit" class="btn btn-ghost">Unlock with key</button>
-            </div>
-            <p class="license-msg" role="status"></p>
-          </form>
-        </details>
-        <div class="actions">
-          <button type="button" class="btn btn-ghost" id="btn-restart">Retake quiz</button>
-        </div>
-      </div>
-
       <div class="card hidden" id="full-report">
-        <span class="badge">Full report · unlocked</span>
+        <span class="badge">Full report · free</span>
         <h2 style="margin-top:0.5rem;">Your full Flow Score report</h2>
-        <p class="unlock-status" id="unlock-status" role="status"></p>
-        <div class="no-print">
-          <p><strong>Thanks for your purchase. How to use and keep your report:</strong></p>
-          <ol class="buyer-steps">
-            <li>Your report is below: all 8 checks, gaps first, each with structure, message timing, segment rules, and a QA checklist.</li>
-            <li>Save a copy now: <strong>Download Markdown</strong> (for docs/Notion), <strong>Download CSV</strong> (for a backlog or spreadsheet), or <strong>Print / Save as PDF</strong>.</li>
-            <li>This browser remembers your unlock and answers. Bookmark <a href="score.html">inkrailco.github.io/score.html</a> to come back.</li>
-            <li>On another device or browser, open the same page and enter the <strong>license key</strong> from your Lemon Squeezy receipt email. If you re-open the link in that email, this device unlocks again too.</li>
-            <li>Changed a flow? <strong>Retake quiz</strong> and the report re-ranks.</li>
-          </ol>
-          <p class="small muted">Your answers stay in this browser; Inkrail never logs into your ESP. Questions, a lost key, or refunds: <a href="mailto:inkrailco@gmail.com">inkrailco@gmail.com</a>.</p>
-          <details class="restore">
-            <summary>Add or check your license key</summary>
-            <form class="license-form" novalidate>
-            <label class="small" for="license-key-unlocked">License key (from your Lemon Squeezy receipt email)</label>
-            <div class="license-row">
-              <input type="text" class="license-input" id="license-key-unlocked" name="license_key" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
-              <button type="submit" class="btn btn-ghost">Unlock with key</button>
-            </div>
-            <p class="license-msg" role="status"></p>
-          </form>
-          </details>
-          <div class="actions">
-            <button type="button" class="btn btn-primary" id="btn-export-md">Download Markdown</button>
-            <button type="button" class="btn btn-ghost" id="btn-export-csv">Download CSV</button>
-            <button type="button" class="btn btn-ghost" id="btn-print">Print / Save as PDF</button>
-            <button type="button" class="btn btn-ghost" id="btn-restart-2">Retake quiz</button>
-          </div>
+        <p class="muted">Free Klaviyo/email flow checklist — all 8 items, with gaps first, timing, segments, QA, and exports.</p>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="btn-export-md">Download Markdown</button>
+          <button type="button" class="btn btn-ghost" id="btn-export-csv">Download CSV</button>
+          <button type="button" class="btn btn-ghost" id="btn-print">Print / Save as PDF</button>
+          <button type="button" class="btn btn-ghost" id="btn-restart-2">Retake quiz</button>
         </div>
         <div id="report-body"></div>
-      </div>
-
-      <div class="card" id="waitlist">
-        <h2>Not ready to buy?</h2>
-        <p class="muted">Your score and top 3 fixes stay on this device. The full report is available now for <strong>US$29</strong> one-time via the button above. Want the link for later? Enter your email and your email app will open a prefilled message to us; send it and we’ll reply with the link.</p>
-        <form class="waitlist-form" id="waitlist-form">
-          <label class="hidden" for="waitlist-email">Email</label>
-          <input type="email" id="waitlist-email" name="email" placeholder="you@brand.com" required autocomplete="email" />
-          <button type="submit" class="btn btn-primary">Email me the link</button>
-        </form>
-        <p class="waitlist-msg" id="waitlist-msg" role="status"></p>
       </div>
     </section>
 
